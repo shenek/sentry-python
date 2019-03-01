@@ -26,7 +26,8 @@ def wsgistr(s):
 
 
 @pytest.fixture(scope="function")
-def app():
+def app(sentry_init):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
     app = Bottle()
     wsgiapp = wsgiref.validate.validator(app)
 
@@ -87,7 +88,6 @@ def test_has_context(sentry_init, app, capture_events):
 @pytest.mark.parametrize("debug", (True, False), ids=["debug", "nodebug"])
 @pytest.mark.parametrize("catchall", (True, False), ids=["catchall", "nocatchall"])
 def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, catchall):
-    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
     set_debug(mode=debug)
     app, urlopen = app
     app.catchall = catchall

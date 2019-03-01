@@ -62,9 +62,6 @@ class BottleIntegration(Integration):
             def customized_start_response(*args, **kwargs):
                 import sys
                 try:
-                    sys.stderr.write("aasdfasdfasfd %s\n" % [type(e) for e in args])
-                    sys.stderr.write("XXXXX:wdfasfd %s\n" % start_response.func_code)
-                    sys.stderr.write("XXXXX:wdfasfd %s\n" % dir(start_response.func_closure))
                     res = start_response(*args, **kwargs)
                 except Exception as exception:
                     hub = Hub.current
@@ -82,6 +79,41 @@ class BottleIntegration(Integration):
             )
 
         Bottle.__call__ = sentry_patched_wsgi_app  # type: ignore
+
+        # monkey patch Bottle.__init__
+        # to monkey patch method self.router.match -> (route, args)
+        # to monkey patch route.call
+        #
+        # three little monkeys swinging in a tree ...
+
+        old_init = Bottle.__init__
+        def sentry_patched_wsgi_app_init(self, *args, **kwargs):
+            old_init(self, *args, **kwargs)
+            if Hub.current.get_integration(BottleIntegration) is not None:
+                old_match = self.router.match
+
+                def patched_match(*args, **kwargs):
+                    route, route_args = old_match(*args, **kwargs)
+                    old_call = route.call
+
+                    def patched_call(*args, **kwargs):
+                        try:
+                            old_call(*args, **kwargs)
+                        except Exception as exception:
+                            hub = Hub.current
+                            event, hint = event_from_exception(
+                                exception, client_options=hub.client.options,
+                                mechanism={"type": "bottle", "handled": Bottle.catchall},
+                            )
+                            hub.capture_event(event, hint=hint)
+                            raise exception
+
+                    route.call = patched_call
+                    return route, route_args
+
+                self.router.match = patched_match
+
+        Bottle.__init__ = sentry_patched_wsgi_app_init  # type: ignore
 
 
 def _push_appctx(*args, **kwargs):
