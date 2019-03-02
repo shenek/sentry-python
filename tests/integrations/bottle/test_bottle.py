@@ -109,3 +109,30 @@ def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, cat
     assert isinstance(exc, ZeroDivisionError)
 
     event, = events
+    assert event["exception"]["values"][0]["mechanism"]["type"] == "bottle"
+
+
+def test_flask_large_json_request(sentry_init, capture_events, app):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+
+    data = {"foo": {"bar": "a" * 2000}}
+
+    @app.route("/", methods=["POST"])
+    def index():
+        assert request.json == data
+        assert request.data == json.dumps(data).encode("ascii")
+        assert not request.form
+        capture_message("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = app.test_client()
+    response = client.post("/", content_type="application/json", data=json.dumps(data))
+    assert response.status_code == 200
+
+    event, = events
+    assert event["_meta"]["request"]["data"]["foo"]["bar"] == {
+        "": {"len": 2000, "rem": [["!limit", "x", 509, 512]]}
+    }
+    assert len(event["request"]["data"]["foo"]["bar"]) == 512
