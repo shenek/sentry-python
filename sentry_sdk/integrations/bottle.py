@@ -91,17 +91,27 @@ class BottleIntegration(Integration):
             old_handle = self._handle
 
             def _patched_handle(self, environ):
-                app = self
-                while hasattr(app, 'app'):
-                    app = app.app  # to level app
-                import bottle
-                with hub.configure_scope() as scope:
+                # create new scope
+                scope_manager = hub.push_scope()
+
+                with scope_manager as scope:
+
+                    app = self
+                    while hasattr(app, 'app'):
+                        app = app.app  # to level app
+
+                    import bottle
+                    scope._name = "bottle"
+
                     scope.add_event_processor(
                         _make_request_event_processor(
                             app, bottle.request, integration
                         )
                     )
-                return old_handle(environ)
+                    res = old_handle(environ)
+
+                # scope cleanup
+                return res
 
             self._handle = types.MethodType(_patched_handle, self)
 
