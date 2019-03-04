@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import types
 
 import weakref
 
@@ -14,7 +15,7 @@ if False:
     from typing import Dict
     from typing import Union
     from typing import Callable
-    from bottle import FileUpload
+    from bottle import FileUpload, FormsDict
 
 #from flask import Request, Flask, _request_ctx_stack, _app_ctx_stack  # type: ignore
 from bottle import Bottle, BaseRequest
@@ -55,12 +56,14 @@ class BottleIntegration(Integration):
 
         def sentry_patched_wsgi_app(self, environ, start_response):
             # type: (Any, Dict[str, str], Callable) -> _ScopedResponse
-            if Hub.current.get_integration(BottleIntegration) is None:
+
+            hub = Hub.current
+            integration = hub.get_integration(BottleIntegration)
+            if integration is None:
                 return old_app(self, environ, start_response)
 
             # monkey patch method self(Bottle).router.match -> (route, args)
             # to monkey patch route.call
-
             old_match = self.router.match
 
             def patched_match(*args, **kwargs):
@@ -83,6 +86,24 @@ class BottleIntegration(Integration):
                 return route, route_args
 
             self.router.match = patched_match
+
+            # monkey patch method self(Bottle)._handle
+            old_handle = self._handle
+
+            def _patched_handle(self, environ):
+                app = self
+                while hasattr(app, 'app'):
+                    app = app.app  # to level app
+                import bottle
+                with hub.configure_scope() as scope:
+                    scope.add_event_processor(
+                        _make_request_event_processor(
+                            app, bottle.request, integration
+                        )
+                    )
+                return old_handle(environ)
+
+            self._handle = types.MethodType(_patched_handle, self)
 
             return SentryWsgiMiddleware(lambda *a, **kw: old_app(self, *a, **kw))(
                 environ, start_response
@@ -139,11 +160,11 @@ class BottleRequestExtractor(RequestExtractor):
 
     def raw_data(self):
         # type: () -> bytes
-        return self.request.data
+        return self.request.body.read()
 
     def form(self):
-        # type: () -> Dict[str, str]
-        return self.request.form
+        # type: () -> FormsDict
+        return self.request.forms
 
     def files(self):
         # type: () -> Dict[str, str]
