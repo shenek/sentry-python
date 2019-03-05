@@ -82,8 +82,10 @@ class RequestExtractor(object):
                     "", {"len": size, "rem": [["!raw", "x", 0, size]]}
                 )
 
+            with open("/tmp/neco.txt", "a") as f: f.write("PB %s\n" % data)
             return data
 
+        with open("/tmp/neco.txt", "a") as f: f.write("PB2 %s\n" % self.json())
         return self.json()
 
     def is_json(self):

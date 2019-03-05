@@ -117,7 +117,7 @@ def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, cat
 
 
 def test_bottle_large_json_request(sentry_init, capture_events, app):
-    sentry_init(integrations=[bottle_sentry.BottleIntegration()], request_bodies="small")
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
 
     data = {"foo": {"bar": "a" * 2000}}
 

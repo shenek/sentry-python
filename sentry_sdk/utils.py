@@ -716,12 +716,15 @@ def flatten_metadata(obj):
 
 def strip_event_mut(event):
     # type: (Dict[str, Any]) -> None
+    with open("/tmp/neco.txt", "a") as f: f.write("\nSEM %s\n" % event)
     strip_stacktrace_mut(event.get("stacktrace", None))
     exception = event.get("exception", None)
+    with open("/tmp/neco.txt", "a") as f: f.write("\nSEMe %s\n" % exception)
     if exception:
         for exception in exception.get("values", None) or ():
             strip_stacktrace_mut(exception.get("stacktrace", None))
 
+    with open("/tmp/neco.txt", "a") as f: f.write("\nSEMr %s\n" % event.get("request", None))
     strip_request_mut(event.get("request", None))
 
 
@@ -735,11 +738,13 @@ def strip_stacktrace_mut(stacktrace):
 
 def strip_request_mut(request):
     # type: (Dict[str, Any]) -> None
+    #with open("/tmp/neco.txt", "a") as f: f.write("SRM1 %s\n" % request)
     if not request:
         return
     data = request.get("data", None)
     if not data:
         return
+    #with open("/tmp/neco.txt", "a") as f: f.write("SRM2 %s\n" % request["data"])
     request["data"] = strip_databag(data)
 
 
@@ -782,6 +787,10 @@ def convert_types(obj):
 
 def strip_databag(obj, remaining_depth=20):
     # type: (Any, int) -> Any
+    #with open("/tmp/neco.txt", "a") as f: f.write("SD %s\n" % obj)
+    #with open("/tmp/neco.txt", "a") as f: f.write("SD %s\n" % type(obj))
+    #import traceback
+    #with open("/tmp/neco.txt", "a") as f: f.write("SD %s\n" % "\n".join(traceback.format_stack()))
     assert not isinstance(obj, bytes), "bytes should have been normalized before"
     if remaining_depth <= 0:
         return AnnotatedValue(None, {"rem": [["!limit", "x"]]})

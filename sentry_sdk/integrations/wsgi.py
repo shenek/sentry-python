@@ -80,7 +80,9 @@ class SentryWsgiMiddleware(object):
             with capture_internal_exceptions():
                 with hub.configure_scope() as scope:
                     scope._name = "wsgi"
+                    with open("/tmp/neco.txt", "a") as f: f.write("WSGI %s\n" % scope)
                     scope.add_event_processor(_make_wsgi_event_processor(environ))
+                    with open("/tmp/neco.txt", "a") as f: f.write("WSGIE %s\n" % [e[1] for e in hub._stack])
 
             try:
                 rv = self.app(environ, start_response)

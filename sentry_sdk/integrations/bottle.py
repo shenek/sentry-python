@@ -91,24 +91,28 @@ class BottleIntegration(Integration):
             old_handle = self._handle
 
             def _patched_handle(self, environ):
+                hub = Hub.current
+                with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
                 # create new scope
                 scope_manager = hub.push_scope()
 
-                with scope_manager as scope:
+                with scope_manager:
 
                     app = self
                     while hasattr(app, 'app'):
                         app = app.app  # to level app
 
-                    import bottle
-                    scope._name = "bottle"
+                    with hub.configure_scope() as scope:
+                        import bottle
+                        scope._name = "bottle"
 
-                    scope.add_event_processor(
-                        _make_request_event_processor(
-                            app, bottle.request, integration
+                        scope.add_event_processor(
+                            _make_request_event_processor(
+                                app, bottle.request, integration
+                            )
                         )
-                    )
                     res = old_handle(environ)
+                    with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
 
                 # scope cleanup
                 return res
@@ -162,34 +166,42 @@ def _request_started(sender, **kwargs):
 class BottleRequestExtractor(RequestExtractor):
     def env(self):
         # type: () -> Dict[str, str]
+        with open("/tmp/neco.txt", "a") as f: f.write("ENV\n")
         return self.request.environ
 
     def cookies(self):
+        with open("/tmp/neco.txt", "a") as f: f.write("COOKIES\n")
         # type: () -> Dict[str, str]
         return self.request.cookies
 
     def raw_data(self):
+        with open("/tmp/neco.txt", "a") as f: f.write("RAW\n")
         # type: () -> bytes
         return self.request.body.read()
 
     def form(self):
+        with open("/tmp/neco.txt", "a") as f: f.write("FORM\n")
         # type: () -> FormsDict
         return self.request.forms
 
     def files(self):
         # type: () -> Dict[str, str]
-        return self.request.files
+        with open("/tmp/neco.txt", "a") as f: f.write("FILES\n")
+        res = self.request.files
+        with open("/tmp/neco.txt", "a") as f: f.write("FILESR %s\n" % res)
+        return res
 
     def size_of_file(self, file):
+        with open("/tmp/neco.txt", "a") as f: f.write("SIZE OF\n")
         # type: (FileUpload) -> int
         return file.content_length
 
 
-def _make_request_event_processor(app, weak_request, integration):
+def _make_request_event_processor(app, request, integration):
     # type: (Flask, Callable[[], Request], FlaskIntegration) -> Callable
     def inner(event, hint):
+        with open("/tmp/neco.txt", "a") as f: f.write("III 0\n")
         # type: (Dict[str, Any], Dict[str, Any]) -> Dict[str, Any]
-        request = weak_request()
 
         # if the request is gone we are fine not logging the data from
         # it.  This might happen if the processor is pushed away to
@@ -197,6 +209,7 @@ def _make_request_event_processor(app, weak_request, integration):
         if request is None:
             return event
 
+        with open("/tmp/neco.txt", "a") as f: f.write("III 1\n")
         try:
             if integration.transaction_style == "endpoint":
                 event["transaction"] = request.url_rule.endpoint  # type: ignore
@@ -204,9 +217,12 @@ def _make_request_event_processor(app, weak_request, integration):
                 event["transaction"] = request.url_rule.rule  # type: ignore
         except Exception:
             pass
+        with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
 
         with capture_internal_exceptions():
+            with open("/tmp/neco.txt", "a") as f: f.write("III 3\n")
             BottleRequestExtractor(request).extract_into_event(event)
+            with open("/tmp/neco.txt", "a") as f: f.write("III 4\n")
 
         return event
 

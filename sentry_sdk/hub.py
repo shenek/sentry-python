@@ -364,6 +364,7 @@ class Hub(with_metaclass(HubMeta)):  # type: ignore
         client, scope = self._stack[-1]
         new_layer = (client, copy.copy(scope))
         self._stack.append(new_layer)
+        with open("/tmp/neco.txt", "a") as f: f.write("PPP %s\n" % [e[1] for e in self._stack])
 
         return _ScopeManager(self)
 
