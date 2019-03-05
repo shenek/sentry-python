@@ -92,7 +92,7 @@ class BottleIntegration(Integration):
 
             def _patched_handle(self, environ):
                 hub = Hub.current
-                with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
+                #with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
                 # create new scope
                 scope_manager = hub.push_scope()
 
@@ -180,15 +180,14 @@ class BottleRequestExtractor(RequestExtractor):
         return self.request.body.read()
 
     def form(self):
-        with open("/tmp/neco.txt", "a") as f: f.write("FORM\n")
+        res = self.request.forms.decode()
+        with open("/tmp/neco.txt", "a") as f: f.write("FORM %s\n" % dict(res))
         # type: () -> FormsDict
-        return self.request.forms
+        return res
 
     def files(self):
         # type: () -> Dict[str, str]
-        with open("/tmp/neco.txt", "a") as f: f.write("FILES\n")
         res = self.request.files
-        with open("/tmp/neco.txt", "a") as f: f.write("FILESR %s\n" % res)
         return res
 
     def size_of_file(self, file):
@@ -209,7 +208,7 @@ def _make_request_event_processor(app, request, integration):
         if request is None:
             return event
 
-        with open("/tmp/neco.txt", "a") as f: f.write("III 1\n")
+        #with open("/tmp/neco.txt", "a") as f: f.write("III 1\n")
         try:
             if integration.transaction_style == "endpoint":
                 event["transaction"] = request.url_rule.endpoint  # type: ignore
@@ -217,12 +216,12 @@ def _make_request_event_processor(app, request, integration):
                 event["transaction"] = request.url_rule.rule  # type: ignore
         except Exception:
             pass
-        with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
+        #with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
 
         with capture_internal_exceptions():
-            with open("/tmp/neco.txt", "a") as f: f.write("III 3\n")
+            #with open("/tmp/neco.txt", "a") as f: f.write("III 3\n")
             BottleRequestExtractor(request).extract_into_event(event)
-            with open("/tmp/neco.txt", "a") as f: f.write("III 4\n")
+            #with open("/tmp/neco.txt", "a") as f: f.write("III 4\n")
 
         return event
 

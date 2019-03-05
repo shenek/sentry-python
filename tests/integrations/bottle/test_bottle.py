@@ -138,7 +138,6 @@ def test_bottle_large_json_request(sentry_init, capture_events, app):
         post=json.dumps(data),
         content_type="application/json",
     )
-    #raise Exception(dir(response))
     assert response["code"] == 200
 
     event, = events

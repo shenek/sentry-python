@@ -678,22 +678,31 @@ class AnnotatedValue(object):
 
 def flatten_metadata(obj):
     # type: (Dict[str, Any]) -> Dict[str, Any]
+
+    #with open("/tmp/neco.txt", "a") as f: f.write("\nFM %s\n" % obj)
+    import traceback
+    #with open("/tmp/neco.txt", "a") as f: f.write("\nFMT %s\n" % str(traceback.format_stack()))
+
     def inner(obj):
         # type: (Any) -> Any
         if isinstance(obj, Mapping):
             dict_rv = {}
             meta = {}
             for k, v in obj.items():
+                #with open("/tmp/neco.txt", "a") as f: f.write("\nFMx %s---%s---%s\n" % (k, v, meta))
                 # if we actually have "" keys in our data, throw them away. It's
                 # unclear how we would tell them apart from metadata
                 if k == "":
                     continue
 
+                #with open("/tmp/neco.txt", "a") as f: f.write("\nFMxx %s---%s\n" % (dict_rv, meta))
                 dict_rv[k], meta[k] = inner(v)
                 if meta[k] is None:
                     del meta[k]
                 if dict_rv[k] is None:
                     del dict_rv[k]
+                #with open("/tmp/neco.txt", "a") as f: f.write("\nFMy %s\n" % (dict_rv))
+                with open("/tmp/neco.txt", "a") as f: f.write("\nFMyy %s\n" % (meta))
             return dict_rv, (meta or None)
         if isinstance(obj, Sequence) and not isinstance(obj, (text_type, bytes)):
             list_rv = []
@@ -709,6 +718,7 @@ def flatten_metadata(obj):
         return obj, None
 
     obj, meta = inner(obj)
+    with open("/tmp/neco.txt", "a") as f: f.write("\nFM2 %s\n" % (meta))
     if meta is not None:
         obj["_meta"] = meta
     return obj

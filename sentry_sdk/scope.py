@@ -204,7 +204,7 @@ class Scope(object):
             new_event = event
             with capture_internal_exceptions():
                 new_event = processor(event, hint)
-                with open("/tmp/neco.txt", "a") as f: f.write("ATER %s" % new_event)
+                with open("/tmp/neco.txt", "a") as f: f.write("ATER %s\n" % new_event)
             if new_event is None:
                 return _drop(event, processor, "event processor")
             event = new_event
