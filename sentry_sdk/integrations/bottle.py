@@ -183,8 +183,10 @@ class BottleRequestExtractor(RequestExtractor):
 
     def form(self):
         import traceback
-        with open("/tmp/neco.txt", "a") as f: f.write("FORM t %s\n" % "\n".join(traceback.format_stack()))
-        res = self.request.forms.decode()
+        if self.request.environ['CONTENT_TYPE'] == 'multipart/form-data':
+            res = self.request.forms.decode()
+        else:
+            res = None
         with open("/tmp/neco.txt", "a") as f: f.write("FORM %s\n" % dict(res))
         # type: () -> FormsDict
         return res
