@@ -9,7 +9,6 @@ import mimetypes
 pytest.importorskip("bottle")
 
 from bottle import Bottle, tob, py3k, debug as set_debug, unicode
-
 from sentry_sdk import (
     configure_scope,
     capture_message,
@@ -18,51 +17,9 @@ from sentry_sdk import (
 )
 
 from sentry_sdk.integrations.logging import LoggingIntegration
+from werkzeug.test import Client
+
 import sentry_sdk.integrations.bottle as bottle_sentry
-
-
-def wsgistr(s):
-    if py3k:
-        return s.encode('utf8').decode('latin1')
-    else:
-        return s
-
-
-# copied from bottle.py tests
-def urlopen(wsgiapp, path, method='GET', post='', env=None, content_type=None):
-    result = {'code': 0, 'status': 'error', 'header': {}, 'body': tob('')}
-
-    def start_response(status, header, exc_info=None):
-        result['code'] = int(status.split()[0])
-        result['status'] = status.split(None, 1)[-1]
-        for name, value in header:
-            name = name.title()
-            if name in result['header']:
-                result['header'][name] += ', ' + value
-            else:
-                result['header'][name] = value
-    env = env if env else {}
-    wsgiref.util.setup_testing_defaults(env)
-    env['REQUEST_METHOD'] = wsgistr(method.upper().strip())
-    env['PATH_INFO'] = wsgistr(path)
-    env['QUERY_STRING'] = wsgistr('')
-    if content_type:
-        env["CONTENT_TYPE"] = content_type
-    if post:
-        env['REQUEST_METHOD'] = 'POST'
-        env['CONTENT_LENGTH'] = str(len(tob(post)))
-        env['wsgi.input'].write(tob(post))
-        env['wsgi.input'].seek(0)
-    response = wsgiapp(env, start_response)
-    for part in response:
-        try:
-            result['body'] += part
-        except TypeError:
-            raise TypeError('WSGI app yielded non-byte object %s', type(part))
-    if hasattr(response, 'close'):
-        response.close()
-        del response
-    return result
 
 
 @pytest.fixture(scope="function")
@@ -77,21 +34,32 @@ def app(sentry_init):
     yield app
 
 
-def test_has_context(sentry_init, app, capture_events):
+@pytest.fixture
+def get_client(app):
+
+    def inner():
+        return Client(app)
+
+    return inner
+
+
+def test_has_context(sentry_init, app, capture_events, get_client):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()])
     events = capture_events()
 
-    assert urlopen(wsgiref.validate.validator(app), "/capture")["code"] == 200
+    client = get_client()
+    response = client.get("/capture")
+    assert response[1] == '200 OK'
 
     event, = events
     assert event["message"] == "captured"
     assert "data" not in event["request"]
-    assert event["request"]["url"] == "http://127.0.0.1/capture"
+    assert event["request"]["url"] == "http://localhost/capture"
 
 
 @pytest.mark.parametrize("debug", (True, False), ids=["debug", "nodebug"])
 @pytest.mark.parametrize("catchall", (True, False), ids=["catchall", "nocatchall"])
-def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, catchall):
+def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, catchall, get_client):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()])
 
     app.catchall = catchall
@@ -104,8 +72,9 @@ def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, cat
     def index():
         1 / 0
 
+    client = get_client()
     try:
-        urlopen(wsgiref.validate.validator(app), "/")
+        client.get("/")
     except ZeroDivisionError:
         pass
 
@@ -116,7 +85,7 @@ def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, cat
     assert event["exception"]["values"][0]["mechanism"]["type"] == "bottle"
 
 
-def test_bottle_large_json_request(sentry_init, capture_events, app):
+def test_bottle_large_json_request(sentry_init, capture_events, app, get_client):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()])
 
     data = {"foo": {"bar": "a" * 2000}}
@@ -131,14 +100,13 @@ def test_bottle_large_json_request(sentry_init, capture_events, app):
 
     events = capture_events()
 
-    response = urlopen(
-        wsgiref.validate.validator(app),
-        "/",
-        method="POST",
-        post=json.dumps(data),
-        content_type="application/json",
+    client = get_client()
+    response = client.get("/")
+
+    response = client.post(
+        "/", content_type="application/json", data=json.dumps(data)
     )
-    assert response["code"] == 200
+    assert response[1] == '200 OK'
 
     event, = events
     #__import__("pdb").set_trace()

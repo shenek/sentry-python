@@ -183,6 +183,8 @@ class BottleRequestExtractor(RequestExtractor):
 
     def form(self):
         import traceback
+        if self.is_json():
+            return None
         if self.request.environ['CONTENT_TYPE'] == 'multipart/form-data':
             res = self.request.forms.decode()
         else:
@@ -193,8 +195,9 @@ class BottleRequestExtractor(RequestExtractor):
 
     def files(self):
         # type: () -> Dict[str, str]
-        res = self.request.files
-        return res
+        if self.is_json():
+            return None
+        return self.request.files
 
     def size_of_file(self, file):
         with open("/tmp/neco.txt", "a") as f: f.write("SIZE OF\n")
