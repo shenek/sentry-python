@@ -175,11 +175,15 @@ class BottleRequestExtractor(RequestExtractor):
         return self.request.cookies
 
     def raw_data(self):
-        with open("/tmp/neco.txt", "a") as f: f.write("RAW\n")
         # type: () -> bytes
-        return self.request.body.read()
+        with open("/tmp/neco.txt", "a") as f: f.write("RAW start")
+        res = self.request.body.read()
+        with open("/tmp/neco.txt", "a") as f: f.write("RAW %s\n" % res)
+        return res
 
     def form(self):
+        import traceback
+        with open("/tmp/neco.txt", "a") as f: f.write("FORM t %s\n" % "\n".join(traceback.format_stack()))
         res = self.request.forms.decode()
         with open("/tmp/neco.txt", "a") as f: f.write("FORM %s\n" % dict(res))
         # type: () -> FormsDict
