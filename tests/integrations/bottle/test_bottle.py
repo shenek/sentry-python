@@ -8,6 +8,7 @@ import mimetypes
 
 pytest.importorskip("bottle")
 
+from io import BytesIO
 from bottle import Bottle, tob, py3k, debug as set_debug, unicode
 from sentry_sdk import (
     configure_scope,
@@ -144,3 +145,113 @@ def test_bottle_large_json_request(sentry_init, capture_events, app, get_client)
         "": {"len": 2000, "rem": [["!limit", "x", 509, 512]]}
     }
     assert len(event["request"]["data"]["foo"]["bar"]) == 512
+
+
+@pytest.mark.parametrize("data", [{}, []], ids=["empty-dict", "empty-list"])
+def test_bottle_empty_json_request(sentry_init, capture_events, app, data, get_client):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+
+    @app.route("/", method="POST")
+    def index():
+        import bottle
+        assert bottle.request.json == data
+        assert bottle.request.body.read() == json.dumps(data).encode("ascii")
+        #assert not bottle.request.forms
+        capture_message("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = get_client()
+    response = client.post("/", content_type="application/json", data=json.dumps(data))
+    assert response[1] == '200 OK'
+
+    event, = events
+    assert event["request"]["data"] == data
+
+
+def test_bottle_medium_formdata_request(sentry_init, capture_events, app, get_client):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+
+    data = {"foo": "a" * 2000}
+
+    @app.route("/", method="POST")
+    def index():
+        import bottle
+        assert bottle.request.forms["foo"] == data["foo"]
+        capture_message("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = get_client()
+    response = client.post("/", data=data)
+    assert response[1] == '200 OK'
+
+    event, = events
+    assert event["_meta"]["request"]["data"]["foo"] == {
+        "": {"len": 2000, "rem": [["!limit", "x", 509, 512]]}
+    }
+    assert len(event["request"]["data"]["foo"]) == 512
+
+
+@pytest.mark.parametrize("input_char", [u"a", b"a"])
+def test_flask_too_large_raw_request(sentry_init, input_char, capture_events, app, get_client):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()], request_bodies="small")
+
+    data = input_char * 2000
+
+    @app.route("/", method="POST")
+    def index():
+        import bottle
+        if isinstance(data, bytes):
+            assert bottle.request.body.read() == data
+        else:
+            assert bottle.request.body.read() == data.encode("ascii")
+        assert not bottle.request.json
+        capture_message("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = get_client()
+    response = client.post("/", data=data)
+    assert response[1] == '200 OK'
+
+    event, = events
+    assert event["_meta"]["request"]["data"] == {
+        "": {"len": 2000, "rem": [["!config", "x", 0, 2000]]}
+    }
+    assert not event["request"]["data"]
+
+
+def test_bottle_files_and_form(sentry_init, capture_events, app, get_client):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()], request_bodies="always")
+
+    data = {"foo": "a" * 2000, "file": (BytesIO(b"hello"), "hello.txt")}
+
+    @app.route("/", method="POST")
+    def index():
+        import bottle
+        assert list(bottle.request.forms) == ["foo"]
+        assert list(bottle.request.files) == ["file"]
+        assert not bottle.request.json
+        capture_message("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = get_client()
+    response = client.post("/", data=data)
+    assert response[1] == '200 OK'
+
+    event, = events
+    assert event["_meta"]["request"]["data"]["foo"] == {
+        "": {"len": 2000, "rem": [["!limit", "x", 509, 512]]}
+    }
+    assert len(event["request"]["data"]["foo"]) == 512
+
+    assert event["_meta"]["request"]["data"]["file"] == {
+        "": {"len": 0, "rem": [["!raw", "x", 0, 0]]}
+    }
+    assert not event["request"]["data"]["file"]

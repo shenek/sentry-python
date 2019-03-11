@@ -74,6 +74,7 @@ def test_transaction_style(
 
 
 @pytest.mark.parametrize("debug", (True, False))
+@pytest.mark.parametrize("testing", (True, False))
 def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, testing):
     sentry_init(integrations=[flask_sentry.FlaskIntegration()], debug=True)
 

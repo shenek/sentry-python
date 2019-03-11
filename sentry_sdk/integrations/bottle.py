@@ -185,10 +185,7 @@ class BottleRequestExtractor(RequestExtractor):
         import traceback
         if self.is_json():
             return None
-        if self.request.environ['CONTENT_TYPE'] == 'multipart/form-data':
-            res = self.request.forms.decode()
-        else:
-            res = None
+        res = self.request.forms.decode()
         with open("/tmp/neco.txt", "a") as f: f.write("FORM %s\n" % dict(res))
         # type: () -> FormsDict
         return res
@@ -217,13 +214,14 @@ def _make_request_event_processor(app, request, integration):
         if request is None:
             return event
 
-        #with open("/tmp/neco.txt", "a") as f: f.write("III 1\n")
+        #with open("/tmp/neco.txt", "a") as f: f.write("TTT 1 %s\n" % integration.transaction_style)
         try:
             if integration.transaction_style == "endpoint":
-                event["transaction"] = request.route.name or request.route.callback.func_name  # type: ignore
+                event["transaction"] = request.route.name or getattr(request.route.callback, 'func_name', request.route.callback.__name__)  # type: ignore
             elif integration.transaction_style == "url":
                 event["transaction"] = request.route.rule  # type: ignore
-        except Exception:
+        except Exception as e:
+            with open("/tmp/neco.txt", "a") as f: f.write("TTT E %s\n" % e)
             pass
         #with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
 
