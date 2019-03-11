@@ -26,10 +26,15 @@ import sentry_sdk.integrations.bottle as bottle_sentry
 def app(sentry_init):
     app = Bottle()
 
-    @app.route("/capture")
-    def capture_route():
-        capture_message("captured")
-        return "Captured"
+    @app.route("/message")
+    def hi():
+        capture_message("hi")
+        return "ok"
+
+    @app.route("/message-named-route", name="hi")
+    def named_hi():
+        capture_message("hi")
+        return "ok"
 
     yield app
 
@@ -48,13 +53,38 @@ def test_has_context(sentry_init, app, capture_events, get_client):
     events = capture_events()
 
     client = get_client()
-    response = client.get("/capture")
+    response = client.get("/message")
     assert response[1] == '200 OK'
 
     event, = events
-    assert event["message"] == "captured"
+    assert event["message"] == "hi"
     assert "data" not in event["request"]
-    assert event["request"]["url"] == "http://localhost/capture"
+    assert event["request"]["url"] == "http://localhost/message"
+
+
+@pytest.mark.parametrize(
+    "url,transaction_style,expected_transaction", [
+        ("/message", "endpoint", "hi"),
+        ("/message", "url", "/message"),
+        ("/message-named-route", "endpoint", "hi")
+    ]
+)
+def test_transaction_style(
+    sentry_init, app, capture_events, transaction_style, expected_transaction, url, get_client
+):
+    sentry_init(
+        integrations=[
+            bottle_sentry.BottleIntegration(transaction_style=transaction_style)
+        ]
+    )
+    events = capture_events()
+
+    client = get_client()
+    response = client.get("/message")
+    assert response[1] == '200 OK'
+
+    event, = events
+    assert event["transaction"] == expected_transaction
 
 
 @pytest.mark.parametrize("debug", (True, False), ids=["debug", "nodebug"])

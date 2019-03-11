@@ -220,9 +220,9 @@ def _make_request_event_processor(app, request, integration):
         #with open("/tmp/neco.txt", "a") as f: f.write("III 1\n")
         try:
             if integration.transaction_style == "endpoint":
-                event["transaction"] = request.url_rule.endpoint  # type: ignore
+                event["transaction"] = request.route.name or request.route.callback.func_name  # type: ignore
             elif integration.transaction_style == "url":
-                event["transaction"] = request.url_rule.rule  # type: ignore
+                event["transaction"] = request.route.rule  # type: ignore
         except Exception:
             pass
         #with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
