@@ -268,6 +268,8 @@ def test_bottle_files_and_form(sentry_init, capture_events, app, get_client):
 def test_errors_not_reported_twice(sentry_init, integrations, capture_events, app, get_client):
     sentry_init(integrations=integrations)
 
+    app.catchall = False
+
     logger = logging.getLogger("bottle.app")
 
     @app.route("/")
@@ -285,3 +287,32 @@ def test_errors_not_reported_twice(sentry_init, integrations, capture_events, ap
         client.get("/")
 
     assert len(events) == 1
+
+
+def test_logging(sentry_init, capture_events, app, get_client):
+    # ensure that Bottle's logger magic doesn't break ours
+    sentry_init(
+        integrations=[
+            bottle_sentry.BottleIntegration(),
+            LoggingIntegration(event_level="ERROR"),
+        ]
+    )
+
+    @app.route("/")
+    def index():
+        app.logger.error("hi")
+        return "ok"
+
+    events = capture_events()
+
+    client = get_client()
+    client.get("/")
+
+    event, = events
+    assert event["level"] == "error"
+
+
+def test_no_errors_without_request(app, sentry_init):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+    with app.app_context():
+        capture_exception(ValueError())
