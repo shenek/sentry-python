@@ -194,10 +194,15 @@ class BottleRequestExtractor(RequestExtractor):
         # type: () -> Dict[str, str]
         if self.is_json():
             return None
-        return self.request.files
+
+        res = self.request.files
+        with open("/tmp/neco.txt", "a") as f: f.write("FILE %s\n" % dict(res))
+        return res
 
     def size_of_file(self, file):
-        with open("/tmp/neco.txt", "a") as f: f.write("SIZE OF\n")
+        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % file)
+        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % dir(file))
+        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % dir(file))
         # type: (FileUpload) -> int
         return file.content_length
 

@@ -4,6 +4,7 @@ import wsgiref.validate
 import wsgiref.util
 import uuid
 import mimetypes
+import logging
 
 
 pytest.importorskip("bottle")
@@ -252,6 +253,35 @@ def test_bottle_files_and_form(sentry_init, capture_events, app, get_client):
     assert len(event["request"]["data"]["foo"]) == 512
 
     assert event["_meta"]["request"]["data"]["file"] == {
-        "": {"len": 0, "rem": [["!raw", "x", 0, 0]]}
+        "": {"len": -1, "rem": [["!raw", "x", 0, -1]]}  # bottle default content-length is -1
     }
     assert not event["request"]["data"]["file"]
+
+
+@pytest.mark.parametrize(
+    "integrations",
+    [
+        [bottle_sentry.BottleIntegration()],
+        [bottle_sentry.BottleIntegration(), LoggingIntegration(event_level="ERROR")],
+    ],
+)
+def test_errors_not_reported_twice(sentry_init, integrations, capture_events, app, get_client):
+    sentry_init(integrations=integrations)
+
+    logger = logging.getLogger("bottle.app")
+
+    @app.route("/")
+    def index():
+        try:
+            1 / 0
+        except Exception as e:
+            logger.exception(e)
+            raise e
+
+    events = capture_events()
+
+    client = get_client()
+    with pytest.raises(ZeroDivisionError):
+        client.get("/")
+
+    assert len(events) == 1
