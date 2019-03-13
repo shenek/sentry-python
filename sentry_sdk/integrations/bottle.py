@@ -108,43 +108,6 @@ class BottleIntegration(Integration):
         Bottle.__call__ = sentry_patched_wsgi_app  # type: ignore
 
 
-def _push_appctx(*args, **kwargs):
-    # type: (*Flask, **Any) -> None
-    hub = Hub.current
-    if hub.get_integration(FlaskIntegration) is not None:
-        # always want to push scope regardless of whether WSGI app might already
-        # have (not the case for CLI for example)
-        scope_manager = hub.push_scope()
-        scope_manager.__enter__()
-        _app_ctx_stack.top.sentry_sdk_scope_manager = scope_manager
-        with hub.configure_scope() as scope:
-            scope._name = "flask"
-
-
-def _pop_appctx(*args, **kwargs):
-    # type: (*Flask, **Any) -> None
-    scope_manager = getattr(_app_ctx_stack.top, "sentry_sdk_scope_manager", None)
-    if scope_manager is not None:
-        scope_manager.__exit__(None, None, None)
-
-
-def _request_started(sender, **kwargs):
-    # type: (Flask, **Any) -> None
-    hub = Hub.current
-    integration = hub.get_integration(FlaskIntegration)
-    if integration is None:
-        return
-
-    weak_request = weakref.ref(_request_ctx_stack.top.request)
-    app = _app_ctx_stack.top.app
-    with hub.configure_scope() as scope:
-        scope.add_event_processor(
-            _make_request_event_processor(  # type: ignore
-                app, weak_request, integration
-            )
-        )
-
-
 class BottleRequestExtractor(RequestExtractor):
     def env(self):
         # type: () -> Dict[str, str]
@@ -178,7 +141,7 @@ class BottleRequestExtractor(RequestExtractor):
 
 
 def _make_request_event_processor(app, request, integration):
-    # type: (Flask, Callable[[], Request], FlaskIntegration) -> Callable
+    # type: (Bottle, Callable[[], Request], BottleIntegration) -> Callable
     def inner(event, hint):
         # type: (Dict[str, Any], Dict[str, Any]) -> Dict[str, Any]
 
