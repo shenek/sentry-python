@@ -10,7 +10,9 @@ import logging
 pytest.importorskip("bottle")
 
 from io import BytesIO
-from bottle import Bottle, tob, py3k, debug as set_debug, unicode
+from bottle import (
+    Bottle, tob, py3k, debug as set_debug, abort
+)
 from sentry_sdk import (
     configure_scope,
     capture_message,
@@ -115,6 +117,7 @@ def test_errors(sentry_init, capture_exceptions, capture_events, app, debug, cat
 
     event, = events
     assert event["exception"]["values"][0]["mechanism"]["type"] == "bottle"
+    assert event["exception"]["values"][0]["mechanism"]["handled"] == catchall
 
 
 def test_bottle_large_json_request(sentry_init, capture_events, app, get_client):
@@ -197,7 +200,7 @@ def test_bottle_medium_formdata_request(sentry_init, capture_events, app, get_cl
 
 
 @pytest.mark.parametrize("input_char", [u"a", b"a"])
-def test_flask_too_large_raw_request(sentry_init, input_char, capture_events, app, get_client):
+def test_bottle_too_large_raw_request(sentry_init, input_char, capture_events, app, get_client):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()], request_bodies="small")
 
     data = input_char * 2000
@@ -312,7 +315,7 @@ def test_logging(sentry_init, capture_events, app, get_client):
     assert event["level"] == "error"
 
 
-def test_wsgi_level_error_is_caught(
+def test_bottle_mount(
     app, capture_exceptions, capture_events, sentry_init, get_client
 ):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()])
@@ -330,11 +333,87 @@ def test_wsgi_level_error_is_caught(
     events = capture_events()
 
     with pytest.raises(ZeroDivisionError) as exc:
-        client.get("/wsgi/xxx")
+        client.get("/wsgi/")
 
     error, = exceptions
 
     assert error is exc.value
 
     event, = events
-    assert event["exception"]["values"][0]["mechanism"]["type"] == "wsgi"
+    assert event["exception"]["values"][0]["mechanism"] == {
+        "type": "bottle", "handled": False
+    }
+
+
+def test_500(sentry_init, capture_events, app, get_client):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+
+    set_debug(False)
+    app.catchall = True
+
+    @app.route("/")
+    def index():
+        1 / 0
+
+    @app.error(500)
+    def error_handler(err):
+        capture_message("error_msg")
+        return "My error"
+
+    events = capture_events()
+
+    client = get_client()
+    response = client.get("/")
+    assert response[1] == '500 Internal Server Error'
+
+    _, event = events
+    assert event["message"] == "error_msg"
+
+
+def test_error_in_errorhandler(
+        sentry_init, capture_events, app, get_client
+):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+
+    set_debug(False)
+    app.catchall = True
+
+    @app.route("/")
+    def index():
+        raise ValueError()
+
+    @app.error(500)
+    def error_handler(err):
+        1 / 0
+
+    events = capture_events()
+
+    client = get_client()
+
+    with pytest.raises(ZeroDivisionError):
+        client.get("/")
+
+    event1, event2 = events
+
+    exception, = event1["exception"]["values"]
+    assert exception["type"] == "ValueError"
+
+    exception = event2["exception"]["values"][0]
+    assert exception["type"] == "ZeroDivisionError"
+
+
+def test_bad_request_not_captured(
+    sentry_init, capture_events, app, get_client
+):
+    sentry_init(integrations=[bottle_sentry.BottleIntegration()])
+    events = capture_events()
+
+    @app.route("/")
+    def index():
+        abort(400, "bad request in")
+
+    client = get_client()
+
+    client.get("/")
+
+    assert not events
