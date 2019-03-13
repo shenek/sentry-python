@@ -66,26 +66,34 @@ class BottleIntegration(Integration):
             # to monkey patch route.call
             old_match = self.router.match
 
-            def patched_match(*args, **kwargs):
+            def patched_match(self, *args, **kwargs):
                 route, route_args = old_match(*args, **kwargs)
                 old_call = route.call
 
-                def patched_call(*args, **kwargs):
+                def patched_call(self, *args, **kwargs):
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXX %s\n" % self.app)
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXY %s\n" % old_call)
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXC %s\n" % self.callback)
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXCC %s\n" % dir(self.callback))
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXCCC %s\n" % str(self.callback.func_closure))
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXCCCc %s\n" % self.callback.func_closure[0])
+                    with open("/tmp/neco.txt", "a") as f: f.write("XXXOC %s\n" % old_call)
+                    mechanism_type = "bottle" if isinstance(self.app, Bottle) else "wsgi"
                     try:
                         old_call(*args, **kwargs)
                     except Exception as exception:
                         hub = Hub.current
                         event, hint = event_from_exception(
                             exception, client_options=hub.client.options,
-                            mechanism={"type": "bottle", "handled": Bottle.catchall},
+                            mechanism={"type": mechanism_type, "handled": Bottle.catchall},
                         )
                         hub.capture_event(event, hint=hint)
                         raise exception
 
-                route.call = patched_call
+                route.call = types.MethodType(patched_call, route)
                 return route, route_args
 
-            self.router.match = patched_match
+            self.router.match = types.MethodType(patched_match, self.route)
 
             # monkey patch method self(Bottle)._handle
             old_handle = self._handle
@@ -99,11 +107,6 @@ class BottleIntegration(Integration):
                 with scope_manager:
 
                     app = self
-                    with open("/tmp/neco.txt", "a") as f: f.write("APPPPing %s %s\n" % (app, app.app))
-                    while hasattr(app, 'app'):
-                        with open("/tmp/neco.txt", "a") as f: f.write("APPPPing %s %s\n" % (app, app.app))
-                        app = app.app  # to level app
-
                     with hub.configure_scope() as scope:
                         import bottle
                         scope._name = "bottle"

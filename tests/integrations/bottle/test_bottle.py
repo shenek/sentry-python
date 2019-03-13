@@ -319,15 +319,10 @@ def test_wsgi_level_error_is_caught(
 
     app.catchall = False
 
-    class WsgiFailure(object):
-        def __init__(self, app):
-            self.app = app
+    def crashing_app(environ, start_response):
+        1 / 0
 
-        def __call__(self, environ, start_response):
-            1 / 0
-            return self.app(environ, start_response)
-
-    app = WsgiFailure(app)
+    app.mount("/wsgi/", crashing_app)
 
     client = Client(app)
 
@@ -335,7 +330,7 @@ def test_wsgi_level_error_is_caught(
     events = capture_events()
 
     with pytest.raises(ZeroDivisionError) as exc:
-        client.get("/")
+        client.get("/wsgi/xxx")
 
     error, = exceptions
 
