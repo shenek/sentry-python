@@ -99,7 +99,9 @@ class BottleIntegration(Integration):
                 with scope_manager:
 
                     app = self
+                    with open("/tmp/neco.txt", "a") as f: f.write("APPPPing %s %s\n" % (app, app.app))
                     while hasattr(app, 'app'):
+                        with open("/tmp/neco.txt", "a") as f: f.write("APPPPing %s %s\n" % (app, app.app))
                         app = app.app  # to level app
 
                     with hub.configure_scope() as scope:

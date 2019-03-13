@@ -312,7 +312,34 @@ def test_logging(sentry_init, capture_events, app, get_client):
     assert event["level"] == "error"
 
 
-def test_no_errors_without_request(app, sentry_init):
+def test_wsgi_level_error_is_caught(
+    app, capture_exceptions, capture_events, sentry_init, get_client
+):
     sentry_init(integrations=[bottle_sentry.BottleIntegration()])
-    with app.app_context():
-        capture_exception(ValueError())
+
+    app.catchall = False
+
+    class WsgiFailure(object):
+        def __init__(self, app):
+            self.app = app
+
+        def __call__(self, environ, start_response):
+            1 / 0
+            return self.app(environ, start_response)
+
+    app = WsgiFailure(app)
+
+    client = Client(app)
+
+    exceptions = capture_exceptions()
+    events = capture_events()
+
+    with pytest.raises(ZeroDivisionError) as exc:
+        client.get("/")
+
+    error, = exceptions
+
+    assert error is exc.value
+
+    event, = events
+    assert event["exception"]["values"][0]["mechanism"]["type"] == "wsgi"
