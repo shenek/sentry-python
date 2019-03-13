@@ -135,7 +135,6 @@ class Scope(object):
         This function behaves like `before_send.`
         """
         self._event_processors.append(func)
-        with open("/tmp/neco.txt", "a") as f: f.write("EP %s F %s S %s\n" % (self._event_processors, func, self))
 
     def add_error_processor(self, func, cls=None):
         # type: (Callable, Optional[type]) -> None
@@ -199,12 +198,9 @@ class Scope(object):
                 event = new_event
 
         for processor in chain(global_event_processors, self._event_processors):
-
-            with open("/tmp/neco.txt", "a") as f: f.write("ATE" + str(processor) + " " + str(self) + "\n")
             new_event = event
             with capture_internal_exceptions():
                 new_event = processor(event, hint)
-                with open("/tmp/neco.txt", "a") as f: f.write("ATER %s\n" % new_event)
             if new_event is None:
                 return _drop(event, processor, "event processor")
             event = new_event

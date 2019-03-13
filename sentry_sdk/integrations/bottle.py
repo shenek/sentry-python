@@ -3,7 +3,7 @@ import types
 
 import weakref
 
-from sentry_sdk.hub import Hub, _should_send_default_pii
+from sentry_sdk.hub import Hub
 from sentry_sdk.utils import capture_internal_exceptions, event_from_exception
 from sentry_sdk.integrations import Integration
 from sentry_sdk.integrations.wsgi import SentryWsgiMiddleware
@@ -17,15 +17,7 @@ if False:
     from typing import Callable
     from bottle import FileUpload, FormsDict
 
-#from flask import Request, Flask, _request_ctx_stack, _app_ctx_stack  # type: ignore
-from bottle import Bottle, BaseRequest
-
-#from flask.signals import (
-    #appcontext_pushed,
-    ##appcontext_tearing_down,
-    #got_request_exception,
-    #request_started,
-#)
+from bottle import Bottle
 
 
 class BottleIntegration(Integration):
@@ -46,11 +38,6 @@ class BottleIntegration(Integration):
     @staticmethod
     def setup_once():
         # type: () -> None
-
-        #appcontext_pushed.connect(_push_appctx)
-        #appcontext_tearing_down.connect(_pop_appctx)
-        #request_started.connect(_request_started)
-        #got_request_exception.connect(_capture_exception)
 
         old_app = Bottle.__call__
 
@@ -92,7 +79,6 @@ class BottleIntegration(Integration):
 
             def _patched_handle(self, environ):
                 hub = Hub.current
-                #with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
                 # create new scope
                 scope_manager = hub.push_scope()
 
@@ -109,7 +95,6 @@ class BottleIntegration(Integration):
                             )
                         )
                     res = old_handle(environ)
-                    with open("/tmp/neco.txt", "a") as f: f.write("SSS %s\n" % [e[1] for e in hub._stack])
 
                 # scope cleanup
                 return res
@@ -163,43 +148,31 @@ def _request_started(sender, **kwargs):
 class BottleRequestExtractor(RequestExtractor):
     def env(self):
         # type: () -> Dict[str, str]
-        with open("/tmp/neco.txt", "a") as f: f.write("ENV\n")
         return self.request.environ
 
     def cookies(self):
-        with open("/tmp/neco.txt", "a") as f: f.write("COOKIES\n")
         # type: () -> Dict[str, str]
         return self.request.cookies
 
     def raw_data(self):
         # type: () -> bytes
-        with open("/tmp/neco.txt", "a") as f: f.write("RAW start")
-        res = self.request.body.read()
-        with open("/tmp/neco.txt", "a") as f: f.write("RAW %s\n" % res)
-        return res
+        return self.request.body.read()
 
     def form(self):
+        # type: () -> FormsDict
         import traceback
         if self.is_json():
             return None
-        res = self.request.forms.decode()
-        with open("/tmp/neco.txt", "a") as f: f.write("FORM %s\n" % dict(res))
-        # type: () -> FormsDict
-        return res
+        return self.request.forms.decode()
 
     def files(self):
         # type: () -> Dict[str, str]
         if self.is_json():
             return None
 
-        res = self.request.files
-        with open("/tmp/neco.txt", "a") as f: f.write("FILE %s\n" % dict(res))
-        return res
+        return self.request.files
 
     def size_of_file(self, file):
-        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % file)
-        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % dir(file))
-        with open("/tmp/neco.txt", "a") as f: f.write("FILE SIZE OF %s\n" % dir(file))
         # type: (FileUpload) -> int
         return file.content_length
 
@@ -207,7 +180,6 @@ class BottleRequestExtractor(RequestExtractor):
 def _make_request_event_processor(app, request, integration):
     # type: (Flask, Callable[[], Request], FlaskIntegration) -> Callable
     def inner(event, hint):
-        with open("/tmp/neco.txt", "a") as f: f.write("III 0\n")
         # type: (Dict[str, Any], Dict[str, Any]) -> Dict[str, Any]
 
         # if the request is gone we are fine not logging the data from
@@ -216,36 +188,17 @@ def _make_request_event_processor(app, request, integration):
         if request is None:
             return event
 
-        #with open("/tmp/neco.txt", "a") as f: f.write("TTT 1 %s\n" % integration.transaction_style)
         try:
             if integration.transaction_style == "endpoint":
                 event["transaction"] = request.route.name or getattr(request.route.callback, 'func_name', request.route.callback.__name__)  # type: ignore
             elif integration.transaction_style == "url":
                 event["transaction"] = request.route.rule  # type: ignore
         except Exception as e:
-            with open("/tmp/neco.txt", "a") as f: f.write("TTT E %s\n" % e)
             pass
-        #with open("/tmp/neco.txt", "a") as f: f.write("III 2\n")
 
         with capture_internal_exceptions():
-            #with open("/tmp/neco.txt", "a") as f: f.write("III 3\n")
             BottleRequestExtractor(request).extract_into_event(event)
-            #with open("/tmp/neco.txt", "a") as f: f.write("III 4\n")
 
         return event
 
     return inner
-
-
-def _capture_exception(sender, exception, **kwargs):
-    # type: (Flask, Union[ValueError, BaseException], **Any) -> None
-    hub = Hub.current
-    if hub.get_integration(FlaskIntegration) is None:
-        return
-    event, hint = event_from_exception(
-        exception,
-        client_options=hub.client.options,
-        mechanism={"type": "flask", "handled": False},
-    )
-
-    hub.capture_event(event, hint=hint)

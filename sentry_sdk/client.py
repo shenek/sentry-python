@@ -143,7 +143,6 @@ class Client(object):
         # generally not surface in before_send
         if event is not None:
             strip_event_mut(event)
-            with open("/tmp/neco.txt", "a") as f: f.write("PE %s\n" % event)
             event = flatten_metadata(event)
             event = convert_types(event)
 

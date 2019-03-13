@@ -125,9 +125,7 @@ class FlaskRequestExtractor(RequestExtractor):
 
     def files(self):
         # type: () -> ImmutableMultiDict
-        res = self.request.files
-        with open("/tmp/neco.txt", "a") as f: f.write("FILE F %s\n" % dict(res))
-        return res
+        return self.request.files
 
     def is_json(self):
         return self.request.is_json

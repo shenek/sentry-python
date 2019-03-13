@@ -42,7 +42,6 @@ class RequestExtractor(object):
             )
         else:
             parsed_body = self.parsed_body()
-            with open("/tmp/neco.txt", "a") as f: f.write("\nEIE %s\n" % (parsed_body))
             if parsed_body is not None:
                 data = parsed_body
             elif self.raw_data():
@@ -83,11 +82,8 @@ class RequestExtractor(object):
                     "", {"len": size, "rem": [["!raw", "x", 0, size]]}
                 )
 
-            with open("/tmp/neco.txt", "a") as f: f.write("PBx %s\n" % form)
-            with open("/tmp/neco.txt", "a") as f: f.write("PB %s\n" % data)
             return data
 
-        with open("/tmp/neco.txt", "a") as f: f.write("PB2 %s\n" % self.json())
         return self.json()
 
     def is_json(self):
