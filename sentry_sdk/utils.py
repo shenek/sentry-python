@@ -353,6 +353,7 @@ def object_to_json(obj, remaining_depth=4, memo=None):
         memo = Memo()
     if memo.memoize(obj):
         return CYCLE_MARKER
+    with open("/tmp/neco.out", "a") as f: f.write("WWW %s\n" % type(obj))
 
     try:
         if remaining_depth > 0:
@@ -372,6 +373,9 @@ def object_to_json(obj, remaining_depth=4, memo=None):
                 ]
 
             if isinstance(obj, Mapping):
+                with open("/tmp/neco.out", "a") as f: f.write("qqx %s %d\n" % (type(obj), remaining_depth))
+                with open("/tmp/neco.out", "a") as f: f.write("qqq %s\n" % dir(obj))
+                #with open("/tmp/neco.out", "a") as f: f.write("qqr %s\n" % dict(obj))
                 return {
                     safe_str(k): object_to_json(
                         v, remaining_depth=remaining_depth - 1, memo=memo
