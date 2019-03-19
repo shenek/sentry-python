@@ -356,6 +356,10 @@ def object_to_json(obj, remaining_depth=4, memo=None):
         with open("/tmp/neco.out", "a") as f: f.write("MMMM")
         return CYCLE_MARKER
 
+    from bottle import LocalRequest
+    if isinstance(obj, LocalRequest):
+        import ipdb; ipdb.set_trace()
+
     try:
         if remaining_depth > 0:
             hints = {"memo": memo, "remaining_depth": remaining_depth}
@@ -377,6 +381,12 @@ def object_to_json(obj, remaining_depth=4, memo=None):
                 with open("/tmp/neco.out", "a") as f: f.write("qqx %s %d\n" % (type(obj), remaining_depth))
                 with open("/tmp/neco.out", "a") as f: f.write("qqq %s\n" % dir(obj))
                 #with open("/tmp/neco.out", "a") as f: f.write("qqr %s\n" % dict(obj))
+                res = {}
+                for k, v in obj.items():
+                    print(k)
+                    res[safe_str(k)] = object_to_json(v, remaining_depth - 1, memo=memo)
+                return res
+
                 return {
                     safe_str(k): object_to_json(
                         v, remaining_depth=remaining_depth - 1, memo=memo
