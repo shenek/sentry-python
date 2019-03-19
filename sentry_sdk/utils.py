@@ -315,15 +315,20 @@ def get_source_context(frame, tb_lineno):
 def safe_str(value):
     # type: (Any) -> str
     try:
+        print("safe_str 1", type(value))
         return text_type(value)
     except Exception:
+        print("safe_str 2")
         return safe_repr(value)
 
 
 def safe_repr(value):
+    print("safe_repr", value)
+    print("safe_repr", type(value))
     # type: (Any) -> str
     try:
         rv = repr(value)
+        #print("safe_repr 2")
         if isinstance(rv, bytes):
             rv = rv.decode("utf-8", "replace")
 
@@ -338,8 +343,12 @@ def safe_repr(value):
         try:
             # unicode-escape does this job, but can only decode latin1. So we
             # attempt to encode in latin1.
-            return rv.encode("latin1").decode("unicode-escape")
+            #print("safe_repr 3.1", type(rv))
+            res = rv.encode("latin1").decode("unicode-escape")
+            #print("safe_repr 3.1.1")
+            return res
         except Exception:
+            #print("safe_repr 3.2")
             # Since usually strings aren't latin1 this can break. In those
             # cases we just give up.
             return rv
@@ -349,42 +358,64 @@ def safe_repr(value):
 
 
 def object_to_json(obj, remaining_depth=4, memo=None):
-    with open("/tmp/neco.out", "a") as f: f.write("WWW %s - %d\n" % (type(obj), remaining_depth))
-    if memo is None:
-        memo = Memo()
-    if memo.memoize(obj):
-        with open("/tmp/neco.out", "a") as f: f.write("MMMM")
-        return CYCLE_MARKER
+    print("WWW %s - %016x - %d" % (type(obj), id(obj), remaining_depth))
+    #print("WWW2 %s" % (dir(obj)))
+    #print("WWW2",  obj)
 
     from bottle import LocalRequest
     if isinstance(obj, LocalRequest):
-        import ipdb; ipdb.set_trace()
+        print("WWW out")
+        return obj
+
+    if memo is None:
+        memo = Memo()
+    if memo.memoize(obj):
+        return CYCLE_MARKER
+
 
     try:
         if remaining_depth > 0:
             hints = {"memo": memo, "remaining_depth": remaining_depth}
             for processor in global_repr_processors:
                 with capture_internal_exceptions():
+                    print("PROCESSOR")
                     result = processor(obj, hints)
                     if result is not NotImplemented:
                         return result
 
             if isinstance(obj, (list, tuple)):
+                print("obj_to_json list/tuple")
                 # It is not safe to iterate over another sequence types as this may raise errors or
                 # bring undesired side-effects (e.g. Django querysets are executed during iteration)
-                return [
+                res = [
                     object_to_json(x, remaining_depth=remaining_depth - 1, memo=memo)
                     for x in obj
                 ]
+                print("obj_to_json list/tuple end")
+                return res
 
             if isinstance(obj, Mapping):
-                with open("/tmp/neco.out", "a") as f: f.write("qqx %s %d\n" % (type(obj), remaining_depth))
-                with open("/tmp/neco.out", "a") as f: f.write("qqq %s\n" % dir(obj))
+                print("o", "%016x" % id(obj), remaining_depth)
                 #with open("/tmp/neco.out", "a") as f: f.write("qqr %s\n" % dict(obj))
                 res = {}
                 for k, v in obj.items():
-                    print(k)
+                    from bottle import LocalRequest
+                    if isinstance(v, LocalRequest):
+                        #v.method
+                        #v.url
+                        #v.urlparts
+                        print("AAAA1", len(v.environ.keys()), v.__hash__())
+                        v.urlparts
+                        print("AAAA2", len(v.environ.keys()), v.__hash__())
+                        pass
+                    #    print("RRRRRRRRRRPPP", repr(v))
+                    #    res[safe_str(k)] = v
+                    #    continue
+                    #print("XX", v)
+                    print("AAAAAAAAAAAAAA", k, "%016x" % id(v), remaining_depth)
                     res[safe_str(k)] = object_to_json(v, remaining_depth - 1, memo=memo)
+                    print("bBBBBBBBAAAAAA", k, "%016x" % id(v), remaining_depth)
+                print("bBBBBBBBEEEEEE", remaining_depth)
                 return res
 
                 return {
@@ -394,9 +425,10 @@ def object_to_json(obj, remaining_depth=4, memo=None):
                     for k, v in obj.items()
                 }
 
+            print("ouch", remaining_depth)
         return safe_repr(obj)
     except Exception as e:
-        with open("/tmp/neco.out", "a") as f: f.write("EEEE %s\n" % e)
+        print("EXEPTION", remaining_depth)
         raise
     finally:
         memo.unmemoize(obj)
@@ -406,16 +438,19 @@ def extract_locals(frame):
     # type: (Any) -> Dict[str, Any]
     rv = {}
     for key, value in frame.f_locals.items():
-        with open("/tmp/neco.out", "a") as f: f.write("XXXX %s \n" % (key))
+        print("XXXX %s" % (key))
         if key == "environ":
-            with open("/tmp/neco.out", "a") as f: f.write("XXXU %s \n" % list(value.keys()))
+            print("XXXU %s" % list(value.keys()))
             for element in [
                 #'bottle.request'
             ]:
                 if element in value:
                     del value[element]
-            with open("/tmp/neco.out", "a") as f: f.write("XXXr %s \n" % type(value['bottle.request']))
+            print("XXXr %s" % type(value['bottle.request']))
+        print("XXX2 %s" % (key))
         rv[str(key)] = object_to_json(value)
+        print("XXX3 %s" % (key))
+    print("XXX EXTRACT EXIT")
     return rv
 
 
@@ -510,6 +545,7 @@ def single_exception_from_error_tuple(
     client_options=None,  # type: Optional[ClientOptions]
     mechanism=None,  # type: Dict[str, Any]
 ):
+    print("XXX EXC START")
     # type: (...) -> Dict[str, Any]
     if exc_value is not None:
         errno = get_errno(exc_value)
@@ -672,6 +708,7 @@ def event_from_exception(
 ):
     # type: (...) -> Tuple[Dict[str, Any], Dict[str, Any]]
     exc_info = exc_info_from_error(exc_info)
+    print("XXXX EVENT", exc_info)
     hint = event_hint_with_exc_info(exc_info)
     return (
         {
