@@ -349,11 +349,12 @@ def safe_repr(value):
 
 
 def object_to_json(obj, remaining_depth=4, memo=None):
+    with open("/tmp/neco.out", "a") as f: f.write("WWW %s - %d\n" % (type(obj), remaining_depth))
     if memo is None:
         memo = Memo()
     if memo.memoize(obj):
+        with open("/tmp/neco.out", "a") as f: f.write("MMMM")
         return CYCLE_MARKER
-    with open("/tmp/neco.out", "a") as f: f.write("WWW %s\n" % type(obj))
 
     try:
         if remaining_depth > 0:
@@ -384,6 +385,9 @@ def object_to_json(obj, remaining_depth=4, memo=None):
                 }
 
         return safe_repr(obj)
+    except Exception as e:
+        with open("/tmp/neco.out", "a") as f: f.write("EEEE %s\n" % e)
+        raise
     finally:
         memo.unmemoize(obj)
 
@@ -392,6 +396,15 @@ def extract_locals(frame):
     # type: (Any) -> Dict[str, Any]
     rv = {}
     for key, value in frame.f_locals.items():
+        with open("/tmp/neco.out", "a") as f: f.write("XXXX %s \n" % (key))
+        if key == "environ":
+            with open("/tmp/neco.out", "a") as f: f.write("XXXU %s \n" % list(value.keys()))
+            for element in [
+                #'bottle.request'
+            ]:
+                if element in value:
+                    del value[element]
+            with open("/tmp/neco.out", "a") as f: f.write("XXXr %s \n" % type(value['bottle.request']))
         rv[str(key)] = object_to_json(value)
     return rv
 
